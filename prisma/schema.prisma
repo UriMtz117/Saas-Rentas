@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. USUARIOS (Dueños de las casas y Administradores)
+model Usuario {
+  id          String      @id @default(cuid())
+  nombre      String
+  email       String      @unique
+  password    String
+  rol         String      @default("USER") // ADMIN o USER
+  propiedades Propiedad[]
+}
+
+// 2. PROPIEDADES (Casas, Deptos, Cuartos)
+model Propiedad {
+  id          String      @id @default(cuid())
+  nombre      String
+  tipo        String
+  direccion   String
+  precio      Float
+  createdAt   DateTime    @default(now())
+  
+  // Relación con el dueño (Usuario)
+  usuarioId   String?
+  usuario     Usuario?    @relation(fields: [usuarioId], references: [id])
+  
+  inquilinos  Inquilino[]
+}
+
+// 3. INQUILINOS (CRM)
+model Inquilino {
+  id          String    @id @default(cuid())
+  nombre      String
+  correo      String    @unique
+  telefono    String
+  activo      Boolean   @default(true)
+  fechaInicio DateTime  @default(now())
+  
+  propiedadId String
+  propiedad   Propiedad @relation(fields: [propiedadId], references: [id])
+  pagos       Pago[]
+}
+
+// 4. PAGOS (Finanzas)
+model Pago {
+  id          String    @id @default(cuid())
+  monto       Float
+  fechaPago   DateTime  @default(now())
+  mesPagado   String
+  estado      String    @default("PENDIENTE")
+  
+  inquilinoId String
+  inquilino   Inquilino @relation(fields: [inquilinoId], references: [id])
+}
