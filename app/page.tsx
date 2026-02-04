@@ -1,120 +1,97 @@
-import { prisma } from "../lib/prisma";
+"use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import BotonIA from "../components/BotonIA";
+import { Zap, MessageSquare, BarChart, Home, UserCircle, ArrowRight } from "lucide-react";
 
-export default async function DashboardPage() {
-  // 1. Consultas a la base de datos (Supabase)
-  const totalPropiedades = await prisma.propiedad.count();
-  const totalInquilinos = await prisma.inquilino.count();
-  
-  // Sumar ingresos de pagos confirmados
-  const ingresosData = await prisma.pago.aggregate({
-    _sum: { monto: true },
-    where: { estado: "PAGADO" }
-  });
-  const ingresosTotales = ingresosData._sum.monto || 0;
+export default function LandingPage() {
+  const [loading, setLoading] = useState(true);
 
-  // Traer los últimos 5 movimientos
-  const ultimosPagos = await prisma.pago.findMany({
-    take: 5,
-    include: { inquilino: true },
-    orderBy: { fechaPago: 'desc' }
-  });
+  // LÓGICA DE PROTECCIÓN: Si hay sesión, expulsa al usuario hacia su Dashboard
+  useEffect(() => {
+    const role = localStorage.getItem("role");
+    if (role === "ADMIN") {
+      window.location.href = "/admin";
+    } else if (role === "USER") {
+      window.location.href = "/dashboard";
+    } else {
+      setLoading(false); // Si no hay nadie, mostramos la publicidad
+    }
+  }, []);
+
+  // Mientras revisa la sesión, mostramos un fondo neutro para evitar parpadeos
+  if (loading) return <div className="bg-slate-900 h-screen w-full flex items-center justify-center text-white font-black italic">CARGANDO...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-12">
-      <div className="max-w-6xl mx-auto">
-        
-        {/* Encabezado */}
-        <div className="mb-10">
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">Panel de Control</h1>
-          <p className="text-gray-500 mt-2">Bienvenido de nuevo. Así va tu negocio hoy.</p>
+    <div className="bg-[#f8fafc] min-h-screen font-sans">
+      {/* NAVBAR */}
+      <nav className="fixed top-0 w-full z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-1.5 rounded-lg"><Home size={18} className="text-white"/></div>
+            <span className="text-white font-black tracking-tighter text-xl italic uppercase">InmoGestion <span className="text-blue-500 underline decoration-blue-500/30">AI</span></span>
+          </div>
+          <Link href="/login" className="text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] transition flex items-center gap-2 group">
+            Acceso Clientes <UserCircle size={18} className="group-hover:text-blue-50 transition"/>
+          </Link>
+        </div>
+      </nav>
+
+      {/* HERO SECTION */}
+      <section className="pt-40 pb-24 px-6 text-center bg-slate-900 text-white rounded-b-[80px] shadow-2xl relative overflow-hidden text-balance">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full opacity-10 pointer-events-none">
+            <div className="absolute top-20 left-10 w-64 h-64 bg-blue-600 rounded-full blur-[120px]"></div>
+            <div className="absolute bottom-10 right-10 w-64 h-64 bg-indigo-600 rounded-full blur-[120px]"></div>
         </div>
 
-        {/* TARJETAS DE ESTADÍSTICAS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition">
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Ingresos Totales</p>
-            <h3 className="text-4xl font-black text-green-600 mt-1">${ingresosTotales.toLocaleString()}</h3>
-            <p className="text-[10px] text-gray-400 mt-4 font-medium uppercase">Actualizado hace un momento</p>
+        <div className="relative z-10 max-w-4xl mx-auto">
+          <div className="inline-block bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.3em] mb-8 italic">
+            Proptech de Próxima Generación
           </div>
-
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition">
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Unidades</p>
-            <h3 className="text-4xl font-black text-blue-600 mt-1">{totalPropiedades}</h3>
-            <Link href="/propiedades" className="text-xs text-blue-500 font-bold hover:underline mt-4 inline-block">Gestionar Inventario →</Link>
-          </div>
-
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition">
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Inquilinos</p>
-            <h3 className="text-4xl font-black text-purple-600 mt-1">{totalInquilinos}</h3>
-            <Link href="/inquilinos" className="text-xs text-purple-500 font-bold hover:underline mt-4 inline-block">Ver todos los contratos →</Link>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <h1 className="text-5xl md:text-8xl font-black tracking-tighter mb-8 italic leading-[0.9]">
+            Gestiona rentas con <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-500">Inteligencia Real.</span>
+          </h1>
+          <p className="text-slate-400 text-xl max-w-2xl mx-auto mb-12 font-medium leading-relaxed">
+            La plataforma definitiva para arrendadores modernos. Automatiza cobranzas, centraliza contratos y obtén reportes inteligentes.
+          </p>
           
-          {/* LISTA DE PAGOS RECIENTES */}
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">Pagos Recientes</h2>
-              <Link href="/pagos" className="text-xs font-bold text-gray-400 hover:text-blue-600 uppercase">Ver todos</Link>
-            </div>
-            
-            <div className="space-y-4">
-              {ultimosPagos.map((pago: any) => (
-                <div key={pago.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition">
-                  <div>
-                    <p className="font-bold text-gray-800">{pago.inquilino.nombre}</p>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase">{pago.mesPagado}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-black text-gray-800">${pago.monto}</p>
-                    <span className="text-[9px] bg-green-200 text-green-700 px-2 py-0.5 rounded-full font-black uppercase">
-                      Confirmado
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {ultimosPagos.length === 0 && (
-                <div className="text-center py-10">
-                  <p className="text-gray-400 text-sm">No hay actividad reciente para mostrar.</p>
-                </div>
-              )}
-            </div>
+          <div className="flex flex-col md:flex-row justify-center gap-5">
+            <Link href="/register" className="bg-blue-600 px-10 py-5 rounded-[25px] font-black uppercase tracking-[0.15em] text-sm hover:bg-blue-700 transition shadow-2xl shadow-blue-600/30 flex items-center justify-center gap-2 group">
+              Comenzar Ahora <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform"/>
+            </Link>
+            <button className="bg-slate-800/50 border border-slate-700 px-10 py-5 rounded-[25px] font-black uppercase tracking-[0.15em] text-sm hover:bg-slate-800 transition">
+              Ver Demo Interactiva
+            </button>
           </div>
-
-          {/* ACCESO A IA Y ACCIONES RÁPIDAS */}
-          <div className="flex flex-col gap-6">
-            <div className="bg-blue-600 p-8 rounded-3xl text-white relative overflow-hidden shadow-xl shadow-blue-200">
-              <div className="relative z-10">
-                <h2 className="text-2xl font-black mb-3 italic">IA de Soporte</h2>
-                <p className="text-blue-100 text-sm mb-8 leading-relaxed">
-                  ¿Tienes dudas sobre deudas, contratos o fechas de vencimiento? Consulta a tu asistente personal ahora.
-                </p>
-                <div className="flex gap-3">
-                   {/* AQUÍ USAMOS EL COMPONENTE CLIENTE */}
-                   <BotonIA />
-                   
-                   <Link href="/pagos/nuevo" className="bg-blue-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-blue-400 transition flex items-center">
-                     Registrar Pago
-                   </Link>
-                </div>
-              </div>
-              <div className="absolute -right-4 -bottom-4 text-9xl opacity-10">🤖</div>
-            </div>
-
-            <div className="bg-gray-900 p-8 rounded-3xl text-white flex justify-between items-center">
-              <div>
-                <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Suscripción</p>
-                <h3 className="text-xl font-bold mt-1">Plan Premium Activo</h3>
-              </div>
-              <div className="w-12 h-12 border-4 border-blue-600 rounded-full border-t-transparent animate-spin-slow"></div>
-            </div>
-          </div>
-
         </div>
-      </div>
+      </section>
+
+      {/* FEATURES */}
+      <section className="max-w-7xl mx-auto py-32 px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="p-10 bg-white rounded-[50px] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all group">
+            <div className="bg-blue-50 text-blue-600 p-5 rounded-[22px] w-fit mb-8 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-inner">
+                <Zap size={28} />
+            </div>
+            <h3 className="font-black text-2xl mb-4 italic tracking-tight uppercase">Gestión con IA</h3>
+            <p className="text-slate-500 text-sm leading-relaxed font-medium text-pretty">Pregunta sobre deudas y contratos a nuestro asistente basado en Gemini IA.</p>
+          </div>
+
+          <div className="p-10 bg-white rounded-[50px] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all group">
+            <div className="bg-green-50 text-green-600 p-5 rounded-[22px] w-fit mb-8 group-hover:bg-green-600 group-hover:text-white transition-colors shadow-inner">
+                <MessageSquare size={28} />
+            </div>
+            <h3 className="font-black text-2xl mb-4 italic tracking-tight uppercase">Cobro Smart</h3>
+            <p className="text-slate-500 text-sm leading-relaxed font-medium text-pretty">Notifica a tus inquilinos vía WhatsApp con un solo clic. Mensajes personalizados.</p>
+          </div>
+
+          <div className="p-10 bg-white rounded-[50px] border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all group">
+            <div className="bg-purple-50 text-purple-600 p-5 rounded-[22px] w-fit mb-8 group-hover:bg-purple-600 group-hover:text-white transition-colors shadow-inner">
+                <BarChart size={28} />
+            </div>
+            <h3 className="font-black text-2xl mb-4 italic tracking-tight uppercase">Reportes Pro</h3>
+            <p className="text-slate-500 text-sm leading-relaxed font-medium text-pretty">Analítica financiera avanzada para conocer la rentabilidad real de tu negocio.</p>
+          </div>
+      </section>
     </div>
   );
 }

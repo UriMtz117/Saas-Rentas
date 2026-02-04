@@ -5,22 +5,93 @@
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Personalización de scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ============================================================
+   SOLUCIÓN MAESTRA: TODO EN UNA SOLA PÁGINA
+   ============================================================ */
+@media print {
+  /* 1. Definimos márgenes de página físicos más pequeños */
+  @page {
+    size: auto;
+    margin: 10mm; /* Reduce el margen del papel */
+  }
+
+  body {
+    visibility: hidden !important;
+    background: white !important;
+  }
+
+  /* 2. El Recibo / Contrato */
+  .receipt-card {
+    visibility: visible !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0.5cm !important; /* Padding interno más pequeño */
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* 3. Reducir el tamaño de los textos y el encabezado */
+  .receipt-header-bg {
+    padding: 20px !important; /* Encabezado más bajo */
+    background-color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .receipt-header-bg h1 { font-size: 20pt !important; }
+  .receipt-body-text { font-size: 10pt !important; line-height: 1.4 !important; }
+
+  /* 4. COMPACTAR LAS FIRMAS (Aquí está el truco) */
+  .signature-section {
+    margin-top: 20px !important;
+    padding-top: 10px !important;
+    gap: 20px !important;
+  }
+
+  .signature-section img {
+    max-height: 1.5cm !important; /* Firmas más bajitas */
+    width: auto !important;
+  }
+
+  .signature-section p {
+    font-size: 8pt !important;
+    margin-top: 5px !important;
+  }
+
+  /* 5. Sello de validación más pequeño */
+  .seal-section {
+    margin-top: 20px !important;
+    padding: 10px !important;
+    transform: scale(0.8);
+  }
+
+  /* Evitar saltos de página dentro de elementos */
+  div, p, section {
+    page-break-inside: avoid !important;
+  }
 }

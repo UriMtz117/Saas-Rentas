@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,33 +9,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. USUARIOS (Dueños de las casas y Administradores)
+// 1. EL NÚCLEO DE USUARIOS (Administradores, Dueños e Inquilinos)
 model Usuario {
   id          String      @id @default(cuid())
   nombre      String
   email       String      @unique
   password    String
-  rol         String      @default("USER") // ADMIN o USER
-  propiedades Propiedad[]
-}
-
-// 2. PROPIEDADES (Casas, Deptos, Cuartos)
-model Propiedad {
-  id          String      @id @default(cuid())
-  nombre      String
-  tipo        String
-  direccion   String
-  precio      Float
+  // ROLES: 'ADMIN', 'PROPIETARIO', 'INQUILINO'
+  rol         String      @default("PROPIETARIO")
+  plan        String      @default("BASICO")
   createdAt   DateTime    @default(now())
   
-  // Relación con el dueño (Usuario)
-  usuarioId   String?
-  usuario     Usuario?    @relation(fields: [usuarioId], references: [id])
+  // Relaciones
+  propiedades    Propiedad[]    // Si es PROPIETARIO, posee casas
+  perfilRenta    Inquilino?     // Si es INQUILINO, tiene este perfil de renta
+  notificaciones Notificacion[] // Historial de avisos del sistema
+}
+
+// 2. PROPIEDADES (Unidades Inmobiliarias)
+model Propiedad {
+  id          String   @id @default(cuid())
+  nombre      String
+  tipo        String   // Casa, Departamento, Cuarto
+  direccion   String
+  precio      Float
+  createdAt   DateTime @default(now())
+  lat         Float?   // Coordenada para el mapa
+  lng         Float?   // Coordenada para el mapa
+  fotos       Json?    @default("[]") // Lista de URLs de imágenes
+  
+  // Relación con el dueño
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id])
   
   inquilinos  Inquilino[]
 }
 
-// 3. INQUILINOS (CRM)
+// 3. CONTRATOS LEGALES DIGITALES
+model Contrato {
+  id           String    @id @default(cuid())
+  cuerpo       String    @db.Text   // Texto completo del contrato
+  firmado      Boolean   @default(false) // Firma del inquilino
+  firmaImg     String?   @db.Text   // Imagen de firma del inquilino
+  firmaOwner   String?   @db.Text   // Imagen de firma del propietario
+  firmadoOwner Boolean   @default(false) // Firma del propietario
+  fechaFirma   DateTime?
+  
+  // Relación 1 a 1 con el registro de inquilino
+  inquilinoId  String    @unique
+  inquilino    Inquilino @relation(fields: [inquilinoId], references: [id], onDelete: Cascade)
+}
+
+// 4. SISTEMA DE ALERTAS Y NOTIFICACIONES
+model Notificacion {
+  id        String   @id @default(cuid())
+  mensaje   String
+  tipo      String   // 'CONTRATO', 'PAGO', 'SISTEMA'
+  leido     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  
+  // Relación con el usuario que recibe el aviso
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+}
+
+// 5. CRM DE INQUILINOS (Vínculo entre Personas y Casas)
 model Inquilino {
   id          String    @id @default(cuid())
   nombre      String
@@ -41,19 +81,28 @@ model Inquilino {
   telefono    String
   activo      Boolean   @default(true)
   fechaInicio DateTime  @default(now())
+  fechaFin    DateTime? // Vencimiento del contrato
   
+  // Vínculo con la propiedad que habita
   propiedadId String
   propiedad   Propiedad @relation(fields: [propiedadId], references: [id])
+  
+  // Vínculo con su cuenta de acceso (Opcional si el inquilino no usa la web)
+  usuarioId   String?   @unique
+  usuario     Usuario?  @relation(fields: [usuarioId], references: [id])
+  
   pagos       Pago[]
+  contrato    Contrato?
+  documentos  Json?     @default("[]") // Expediente PDF {nombre, url}
 }
 
-// 4. PAGOS (Finanzas)
+// 6. FINANZAS Y PAGOS
 model Pago {
   id          String    @id @default(cuid())
   monto       Float
   fechaPago   DateTime  @default(now())
   mesPagado   String
-  estado      String    @default("PENDIENTE")
+  estado      String    @default("PENDIENTE") // PAGADO, PENDIENTE
   
   inquilinoId String
   inquilino   Inquilino @relation(fields: [inquilinoId], references: [id])
