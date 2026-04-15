@@ -1,32 +1,41 @@
 import { prisma } from "../../lib/prisma";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers"; // <--- VITAL PARA URLS LIMPIAS
 import { Bell, MessageCircle, User, ShieldCheck, Activity, Zap, MapPin } from "lucide-react";
 
-export default async function RecordatoriosPage({ 
-  searchParams 
-}: { 
-  searchParams: Promise<{ uid?: string }> 
-}) {
-  // 1. OBTENEMOS EL ID DEL USUARIO Y SU ROL
-  const { uid } = await searchParams;
+export default async function RecordatoriosPage() {
+  // 1. OBTENEMOS EL ID DEL USUARIO DESDE LA COOKIE SEGURA
+  const cookieStore = await cookies();
+  const uid = cookieStore.get("userId")?.value;
+
+  if (!uid) redirect("/login");
+
+  // 2. IDENTIFICAMOS AL USUARIO Y SU ROL
   const usuarioActual = await prisma.usuario.findUnique({
-    where: { id: uid || "invitado" }
+    where: { id: uid }
   });
 
-  const isAdmin = usuarioActual?.rol === "ADMIN";
+  if (!usuarioActual) redirect("/login");
 
-  // 2. FILTRO DE PRIVACIDAD DINÁMICO: 
-  // Solo traemos pagos que NO estén pagados.
-  // Si es ADMIN, traemos todos los pendientes del sistema.
-  // Si es USER, solo los pendientes de sus propiedades.
+  const isAdmin = usuarioActual.rol === "ADMIN";
+  const isOwner = usuarioActual.rol === "PROPIETARIO";
+
+  // 3. FILTRO DE PRIVACIDAD DINÁMICO: 
+  // - Traemos solo pagos que NO estén pagados.
+  // - Si es ADMIN, traemos todos.
+  // - Si es OWNER, solo sus propiedades.
+  // - Si es INQUILINO, solo sus propios adeudos.
+  let filter: any = { estado: { not: "PAGADO" } };
+
+  if (isOwner) {
+    filter.inquilino = { propiedad: { usuarioId: uid } };
+  } else if (!isAdmin) {
+    // Es Inquilino
+    filter.inquilino = { usuarioId: uid };
+  }
+
   const pendientes = await prisma.pago.findMany({
-    where: {
-      estado: { not: "PAGADO" },
-      inquilino: isAdmin ? {} : {
-        propiedad: {
-          usuarioId: uid || "no-access"
-        }
-      }
-    },
+    where: filter,
     include: { 
         inquilino: { include: { propiedad: true } } 
     },
@@ -34,13 +43,13 @@ export default async function RecordatoriosPage({
   });
 
   return (
-    <div className="p-8 bg-[#f8fafc] min-h-screen font-sans">
+    <div className="p-4 md:p-8 bg-[#f8fafc] min-h-screen font-sans text-slate-900 italic-none">
       <div className="max-w-4xl mx-auto">
         
         {/* ENCABEZADO PREMIUM */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
           <div className="flex items-center gap-6">
-            <div className="bg-red-100 p-5 rounded-[28px] text-red-600 shadow-lg shadow-red-100 animate-pulse">
+            <div className="bg-red-500 text-white p-5 rounded-[28px] shadow-lg shadow-red-200 animate-pulse">
                 <Bell size={32} />
             </div>
             <div>
@@ -50,20 +59,20 @@ export default async function RecordatoriosPage({
                             <ShieldCheck size={10} /> Central de Cobranza Global
                         </span>
                     ) : (
-                        <span className="bg-slate-200 text-slate-500 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
-                            Mi Gestor de Cobros
+                        <span className="bg-slate-900 text-slate-400 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest italic tracking-tighter">
+                            {isOwner ? "Mi Gestor de Cobros" : "Mis Cuentas Pendientes"}
                         </span>
                     )}
                 </div>
-                <h1 className="text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Recordatorios</h1>
-                <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em] mt-1 flex items-center gap-2">
-                    <Activity size={14} className="text-red-500" /> {pendientes.length} cuentas por liquidar
+                <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">Recordatorios</h1>
+                <p className="text-slate-400 font-bold text-xs uppercase tracking-[0.2em] mt-2 flex items-center gap-2 italic">
+                    <Activity size={14} className="text-red-500" /> {pendientes.length} registros detectados en mora
                 </p>
             </div>
           </div>
         </div>
 
-        {/* LISTA DE DEUDORES CON DISEÑO DE TARJETA DE ALTA GAMA */}
+        {/* LISTA DE DEUDORES CON DISEÑO PREMIUM */}
         <div className="grid gap-6">
           {pendientes.map((p: any) => {
             // Lógica para limpiar el teléfono y generar link de WhatsApp
@@ -94,18 +103,24 @@ export default async function RecordatoriosPage({
                 <div className="flex items-center gap-10 w-full md:w-auto justify-between md:justify-end relative z-10 border-t md:border-0 pt-6 md:pt-0">
                     <div className="text-right">
                         <p className="text-3xl font-black text-slate-900 tracking-tighter italic">${p.monto.toLocaleString()}</p>
-                        <span className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-1 inline-block">Monto en Mora</span>
+                        <span className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-1 inline-block">Balance en Mora</span>
                     </div>
 
-                    {/* BOTÓN DE WHATSAPP DINÁMICO */}
-                    <a 
-                      href={whatsappLink}
-                      target="_blank"
-                      className="bg-green-500 hover:bg-green-600 text-white p-5 rounded-[22px] shadow-xl shadow-green-100 transition-all active:scale-90 flex items-center gap-2 group/btn"
-                    >
-                        <MessageCircle size={22} className="group-hover/btn:rotate-12 transition-transform" />
-                        <span className="font-black text-[10px] uppercase tracking-widest">Cobrar</span>
-                    </a>
+                    {/* BOTÓN DE WHATSAPP DINÁMICO (Oculto para el inquilino, solo dueños cobran) */}
+                    {isOwner || isAdmin ? (
+                        <a 
+                          href={whatsappLink}
+                          target="_blank"
+                          className="bg-green-500 hover:bg-green-600 text-white p-5 rounded-[22px] shadow-xl shadow-green-100 transition-all active:scale-90 flex items-center gap-2 group/btn"
+                        >
+                            <MessageCircle size={22} className="group-hover/btn:rotate-12 transition-transform" />
+                            <span className="font-black text-[10px] uppercase tracking-widest">Enviar Aviso</span>
+                        </a>
+                    ) : (
+                        <div className="bg-slate-50 p-4 rounded-2xl text-slate-300 italic font-black text-[9px] uppercase tracking-widest">
+                            Vencimiento Próximo
+                        </div>
+                    )}
                 </div>
 
                 {/* Adorno visual de fondo */}
@@ -122,8 +137,8 @@ export default async function RecordatoriosPage({
                 <div className="bg-green-50 w-24 h-24 rounded-[40px] flex items-center justify-center mb-8 text-green-500 border border-green-100 shadow-sm">
                     <Zap size={48} fill="currentColor" />
                 </div>
-                <h4 className="text-slate-800 font-black text-2xl uppercase tracking-tighter italic">Cartera Sana</h4>
-                <p className="text-slate-300 font-bold text-sm mt-1 uppercase tracking-widest italic">No existen cobros pendientes en este momento.</p>
+                <h4 className="text-slate-800 font-black text-2xl uppercase tracking-tighter italic">Cero Adeudos</h4>
+                <p className="text-slate-300 font-bold text-sm mt-1 uppercase tracking-widest italic">No existen registros en mora vinculados a este perfil.</p>
             </div>
           )}
         </div>

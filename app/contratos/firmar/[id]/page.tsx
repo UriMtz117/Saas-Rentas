@@ -3,21 +3,20 @@ import { useRef, useState, useEffect } from "react";
 import SignatureCanvas from "react-signature-canvas";
 import { motion } from "framer-motion";
 import { CheckCircle2, PenTool, Trash2, FileText, ShieldCheck, ArrowLeft, Award } from "lucide-react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function FirmarContrato() {
-  // 1. Obtenemos el ID del contrato de la URL
+  // 1. Obtenemos solo el ID del contrato de la ruta dinámica
   const { id } = useParams();
-  const searchParams = useSearchParams();
-  const uid = searchParams.get("uid");
+  const router = useRouter();
 
   const sigCanvas = useRef<any>(null);
   const [contrato, setContrato] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [enviado, setEnviado] = useState(false);
 
-  // 2. CARGAR EL CONTENIDO DEL CONTRATO (Incluyendo la firma del dueño)
+  // 2. CARGAR EL CONTENIDO DEL CONTRATO
   useEffect(() => {
     const obtenerContrato = async () => {
       try {
@@ -33,11 +32,13 @@ export default function FirmarContrato() {
     if (id) obtenerContrato();
   }, [id]);
 
-  // 3. GUARDAR LA FIRMA DEL INQUILINO EN LA BASE DE DATOS
+  // 3. GUARDAR LA FIRMA (USANDO EL ID DE SESIÓN INTERNO)
   const guardarFirma = async () => {
     if (sigCanvas.current.isEmpty()) return alert("Por favor dibuja tu firma primero");
     
-    // Convertimos el dibujo a una imagen Base64
+    // Obtenemos el userId de la memoria, no de la URL
+    const userIdLogueado = localStorage.getItem("userId");
+    
     const firmaData = sigCanvas.current.getTrimmedCanvas().toDataURL("image/png");
 
     const res = await fetch(`/api/contratos/firmar`, {
@@ -45,7 +46,8 @@ export default function FirmarContrato() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
         contratoId: id, 
-        firmaImg: firmaData 
+        firmaImg: firmaData,
+        usuarioId: userIdLogueado // Pasamos el ID por seguridad interna
       })
     });
 
@@ -67,9 +69,9 @@ export default function FirmarContrato() {
       <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
         <CheckCircle2 size={120} className="mx-auto mb-8 shadow-2xl shadow-green-600" />
         <h1 className="text-5xl font-black italic uppercase tracking-tighter">¡Documento Firmado!</h1>
-        <p className="mt-4 font-bold opacity-80 uppercase text-xs tracking-widest mb-10">El contrato ha sido legalizado con éxito y guardado en tu expediente.</p>
+        <p className="mt-4 font-bold opacity-80 uppercase text-xs tracking-widest mb-10 text-balance">El contrato ha sido legalizado con éxito y guardado en tu expediente digital.</p>
         <button 
-            onClick={() => window.location.href=`/dashboard?uid=${uid}`}
+            onClick={() => window.location.href="/dashboard"} // URL LIMPIA
             className="bg-white text-green-600 px-10 py-5 rounded-[25px] font-black uppercase text-xs tracking-widest shadow-xl hover:scale-105 transition-transform"
         >
             Regresar al Panel
@@ -79,15 +81,15 @@ export default function FirmarContrato() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-10 font-sans text-slate-900">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-10 font-sans text-slate-900 italic-none">
       <div className="max-w-4xl mx-auto pb-20">
         
-        <Link href={`/dashboard?uid=${uid}`} className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest mb-10 transition italic">
+        {/* URL LIMPIA EN EL BOTÓN REGRESAR */}
+        <Link href="/dashboard" className="inline-flex items-center gap-2 text-slate-400 hover:text-slate-900 font-black text-[10px] uppercase tracking-widest mb-10 transition italic">
           <ArrowLeft size={16} /> Salir sin guardar
         </Link>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white shadow-2xl rounded-[50px] overflow-hidden border border-slate-200">
-            {/* Cabecera Legal */}
             <div className="bg-slate-900 p-10 text-white flex justify-between items-center relative overflow-hidden">
                 <div className="relative z-10">
                     <div className="flex items-center gap-3 mb-2">
@@ -99,14 +101,12 @@ export default function FirmarContrato() {
                 <ShieldCheck size={80} className="absolute -right-4 -bottom-4 opacity-10" />
             </div>
 
-            {/* CUERPO DEL CONTRATO (Con la firma del dueño integrada) */}
             <div className="p-10 md:p-16">
                 <div className="bg-slate-50 p-8 md:p-12 rounded-[40px] border border-slate-100 shadow-inner">
                     <div className="whitespace-pre-wrap font-serif text-lg leading-relaxed text-slate-700 italic">
                         {contrato?.cuerpo || "No hay contenido disponible para este documento."}
                     </div>
 
-                    {/* MUESTRA LA FIRMA DEL DUEÑO SI YA EXISTE */}
                     {contrato?.firmaOwner && (
                         <div className="mt-12 pt-8 border-t border-slate-200 max-w-xs">
                             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 italic">Firma del Arrendador:</p>
@@ -116,14 +116,13 @@ export default function FirmarContrato() {
                                 className="h-24 w-auto grayscale contrast-125 mix-blend-multiply" 
                             />
                             <div className="mt-2 flex items-center gap-2 text-blue-600 font-black text-[8px] uppercase tracking-tighter">
-                                <Award size={12} /> Firmado y Validado Electrónicamente
+                                <Award size={12} /> Validado Electrónicamente
                             </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* ÁREA DE FIRMA PARA EL INQUILINO */}
             <div className="p-10 md:p-16 border-t border-dashed border-slate-200 bg-slate-50/50">
                 <div className="text-center mb-8">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic italic">Tu Firma de Conformidad</h3>
@@ -133,13 +132,12 @@ export default function FirmarContrato() {
                 <div className="bg-white border-2 border-dashed border-slate-200 rounded-[40px] overflow-hidden mb-10 h-72 shadow-inner relative group bg-[url('https://www.transparenttextures.com/patterns/graphy.png')]">
                     <SignatureCanvas 
                         ref={sigCanvas}
-                        penColor="#1e293b"
+                        penColor="#0f172a"
                         canvasProps={{ width: 800, height: 300, className: "w-full h-full cursor-crosshair" }} 
                     />
                     <button 
                         onClick={() => sigCanvas.current.clear()} 
                         className="absolute top-6 right-6 p-3 bg-white text-slate-300 hover:text-red-500 rounded-2xl shadow-sm transition-all active:scale-90 border border-slate-100"
-                        title="Borrar dibujo"
                     >
                         <Trash2 size={20}/>
                     </button>

@@ -1,34 +1,36 @@
 import { prisma } from "../../lib/prisma";
 import Link from "next/link";
 import { CreditCard, TrendingUp, Clock, CheckCircle2, ChevronRight, Plus, ShieldCheck, Activity } from "lucide-react";
+import { cookies } from "next/headers"; // <--- VITAL PARA URLS LIMPIAS
+import { redirect } from "next/navigation";
 
-export default async function PagosPage({ 
-  searchParams 
-}: { 
-  searchParams: Promise<{ uid?: string }> 
-}) {
-  const { uid } = await searchParams;
+export default async function PagosPage() {
+  // 1. OBTENEMOS EL ID DEL USUARIO DESDE LA COOKIE SEGURA
+  const cookieStore = await cookies();
+  const uid = cookieStore.get("userId")?.value;
 
-  // 1. IDENTIFICAMOS AL USUARIO Y SU ROL
+  if (!uid) redirect("/login");
+
+  // 2. IDENTIFICAMOS AL USUARIO Y SU ROL PARA EL FILTRO
   const user = await prisma.usuario.findUnique({
-    where: { id: uid || "no-id" }
+    where: { id: uid }
   });
 
   const role = user?.rol || "INQUILINO";
   const isAdmin = role === "ADMIN";
   const isOwner = role === "PROPIETARIO";
 
-  // 2. LÓGICA DE FILTRADO MAESTRA
+  // 3. LÓGICA DE FILTRADO MAESTRA (Multi-tenancy)
   let filter: any = {};
   if (isAdmin) {
-    filter = {};
+    filter = {}; // Admin ve todo el flujo del SaaS
   } else if (isOwner) {
-    filter = { inquilino: { propiedad: { usuarioId: uid } } };
+    filter = { inquilino: { propiedad: { usuarioId: uid } } }; // Dueño ve sus cobros
   } else {
-    filter = { inquilino: { usuarioId: uid } };
+    filter = { inquilino: { usuarioId: uid } }; // Inquilino ve sus pagos realizados
   }
 
-  // 3. CONSULTA A LA BASE DE DATOS
+  // 4. CONSULTA A LA BASE DE DATOS CON RELACIONES
   const pagos = await prisma.pago.findMany({
     where: filter,
     include: { 
@@ -37,90 +39,89 @@ export default async function PagosPage({
     orderBy: { fechaPago: 'desc' }
   });
 
-  // 4. CÁLCULOS
+  // 5. CÁLCULO DE MÉTRICAS EN TIEMPO REAL
   const totalRecaudado = pagos
     .filter(p => p.estado === 'PAGADO')
     .reduce((acc: number, p: any) => acc + p.monto, 0);
 
   return (
-    <div className="p-8 bg-[#f8fafc] min-h-screen font-sans text-slate-900">
+    <div className="p-4 md:p-8 bg-[#f8fafc] min-h-screen font-sans text-slate-900 italic-none">
       <div className="max-w-6xl mx-auto">
         
-        {/* ENCABEZADO CON BOTÓN DE ACCIÓN */}
+        {/* ENCABEZADO CON URLS LIMPIAS */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
                 <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest italic ${role === 'INQUILINO' ? 'bg-blue-50 text-blue-600' : 'bg-slate-900 text-slate-400'}`}>
-                    {role === 'INQUILINO' ? 'Historial de Mis Pagos' : 'Consola Financiera'}
+                    {role === 'INQUILINO' ? 'Mi Historial Financiero' : 'Control de Cobranza Global'}
                 </span>
             </div>
-            <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
-                {role === 'INQUILINO' ? 'Mis Recibos' : 'Mi Cobranza'}
+            <h1 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none italic">
+                {role === 'INQUILINO' ? 'Mis Recibos' : 'Caja y Finanzas'}
             </h1>
           </div>
 
-          {/* BOTÓN DE PAGO / COBRO (Visible para todos los roles) */}
           <Link 
-            href={`/pagos/nuevo?uid=${uid}`} 
+            href="/pagos/nuevo" 
             className="bg-blue-600 hover:bg-slate-900 text-white px-10 py-5 rounded-[25px] font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-100 transition-all flex items-center gap-3 active:scale-95 group"
           >
             <Plus size={20} className="group-hover:rotate-90 transition-transform" />
-            {role === 'INQUILINO' ? 'Pagar Renta Ahora' : 'Registrar Nuevo Cobro'}
+            {role === 'INQUILINO' ? 'Pagar Mensualidad' : 'Registrar Cobro'}
           </Link>
         </div>
 
-        {/* TARJETA DE RESUMEN */}
+        {/* TARJETA DE RESUMEN PREMIUM */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
             <div className="bg-slate-900 text-white p-12 rounded-[60px] shadow-2xl flex items-center justify-between relative overflow-hidden group border-b-[12px] border-blue-600">
                 <div className="relative z-10">
                     <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1 italic">
-                        {role === 'INQUILINO' ? 'Total Invertido en Renta' : 'Capital Global Confirmado'}
+                        {role === 'INQUILINO' ? 'Inversión Total en Vivienda' : 'Capital Confirmado en Sistema'}
                     </p>
-                    <h2 className="text-6xl font-black italic tracking-tighter text-blue-500 group-hover:text-white transition-colors duration-500">
+                    <h2 className="text-5xl md:text-6xl font-black italic tracking-tighter text-blue-500 group-hover:text-white transition-colors duration-500">
                         ${totalRecaudado.toLocaleString()}
                     </h2>
                     <div className="mt-6 flex items-center gap-2 text-green-400 font-black text-[9px] uppercase tracking-tighter">
-                        <CheckCircle2 size={12} /> Datos verificados en Supabase
+                        <CheckCircle2 size={12} /> Datos Sincronizados con Supabase
                     </div>
                 </div>
                 <TrendingUp size={140} className="absolute -right-10 -bottom-10 opacity-5 group-hover:scale-110 transition-transform duration-700" />
             </div>
 
             <div className="bg-white p-12 rounded-[60px] border border-slate-100 shadow-sm flex items-center justify-center text-center">
-                <div>
+                <div className="no-print">
                     <Activity size={32} className="text-blue-100 mx-auto mb-4" />
-                    <p className="text-slate-300 font-black text-[10px] uppercase tracking-[0.3em]">Estado de la cuenta</p>
-                    <p className="text-2xl font-black text-slate-800 italic uppercase">Al día y Protegida</p>
+                    <p className="text-slate-300 font-black text-[10px] uppercase tracking-[0.3em]">Seguridad Financiera</p>
+                    <p className="text-2xl font-black text-slate-800 italic uppercase italic">Estado: Operativo</p>
                 </div>
             </div>
         </div>
 
-        {/* LISTA DE TRANSACCIONES */}
+        {/* CRONOLOGÍA DE MOVIMIENTOS */}
         <div className="space-y-6">
           <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.5em] px-8 flex items-center gap-4">
               <div className="h-px bg-slate-100 flex-1"></div>
-              Cronología de Movimientos
+              Historial de Transacciones
               <div className="h-px bg-slate-100 flex-1"></div>
           </h3>
           
           {pagos.map((p: any) => (
-            <Link href={`/pagos/${p.id}?uid=${uid}`} key={p.id} className="block group">
-              <div className="bg-white p-8 rounded-[45px] border border-slate-100 shadow-sm group-hover:shadow-2xl group-hover:-translate-y-1.5 transition-all duration-500 flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden">
+            <Link href={`/pagos/${p.id}`} key={p.id} className="block group">
+              <div className="bg-white p-8 rounded-[45px] border border-slate-100 shadow-sm group-hover:shadow-2xl group-hover:-translate-y-1.5 transition-all duration-500 flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden italic">
                 <div className="flex items-center gap-6 relative z-10">
-                    <div className="w-16 h-16 rounded-[28px] bg-green-50 text-green-600 flex items-center justify-center shadow-inner group-hover:bg-green-500 group-hover:text-white transition-all duration-500">
+                    <div className={`w-16 h-16 rounded-[28px] bg-green-50 text-green-600 flex items-center justify-center shadow-inner group-hover:bg-green-500 group-hover:text-white transition-all duration-500`}>
                         <CheckCircle2 size={32} />
                     </div>
                     <div>
                         <h4 className="font-black text-slate-800 text-xl uppercase tracking-tighter italic group-hover:text-blue-600 transition-colors">{p.inquilino.nombre}</h4>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
                             {p.mesPagado} • {p.inquilino.propiedad.nombre}
                         </p>
                     </div>
                 </div>
                 <div className="text-right relative z-10">
                     <p className="text-4xl font-black text-slate-900 tracking-tighter italic">${p.monto.toLocaleString()}</p>
-                    <span className="text-[9px] font-black bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase tracking-widest mt-2 inline-block border border-slate-200">
-                        {p.estado}
+                    <span className="text-[9px] font-black bg-slate-100 text-slate-400 px-4 py-1.5 rounded-full uppercase tracking-widest mt-2 inline-block border border-slate-200">
+                        {p.estado === 'PAGADO' ? '✓ Confirmado' : '⏳ En Proceso'}
                     </span>
                 </div>
                 <div className="absolute -right-4 -bottom-4 opacity-0 group-hover:opacity-[0.03] text-slate-900 transition-opacity pointer-events-none">
@@ -133,8 +134,10 @@ export default async function PagosPage({
           {pagos.length === 0 && (
             <div className="bg-white p-32 rounded-[60px] border-2 border-dashed border-slate-200 text-center flex flex-col items-center shadow-inner">
                 <CreditCard size={64} className="text-slate-100 mb-8" />
-                <h4 className="text-slate-800 font-black text-2xl uppercase tracking-tighter italic">Cero Movimientos</h4>
-                <p className="text-slate-300 font-bold text-sm mt-1 uppercase tracking-widest italic text-balance px-10">No hemos localizado registros financieros. Si acabas de realizar un pago, se reflejará en unos instantes.</p>
+                <h4 className="text-slate-800 font-black text-2xl uppercase tracking-tighter italic">Cero Actividad</h4>
+                <p className="text-slate-300 font-bold text-sm mt-1 uppercase tracking-widest italic text-balance px-10">
+                    No hemos localizado registros financieros. Si acabas de realizar un pago por tarjeta, se reflejará en unos instantes.
+                </p>
             </div>
           )}
         </div>
