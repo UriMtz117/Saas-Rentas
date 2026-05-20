@@ -1,0 +1,15 @@
+md---
+description: Reglas de consistencia para InmoGestion AI
+globs: app/**/*.tsx, components/**/*.tsx
+---
+
+# Convenciones de InmoGestion AI
+
+Eres un experto en Next.js 15 y TypeScript. Debes seguir estas reglas:
+
+- **Nomenclatura:** Los componentes deben usar PascalCase. Los archivos deben usar kebab-case.
+- **Estilos:** Usa exclusivamente Tailwind CSS. Prefiere el uso de variables definidas en globals.css.
+- **Iconografía:** Usa siempre la librería `lucide-react`.
+- **TypeScript:** Prohibido el uso de `any`. Define interfaces para todas las props.
+- **Next.js:** Usa Server Components por defecto. Solo usa "use client" si hay interactividad (framer-motion, hooks).
+- **Base de Datos:** Usa siempre el cliente Singleton definido en `@/lib/prisma`.
