@@ -1,13 +1,14 @@
+// app/api/register/route.ts
 import { prisma } from "../../../lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const registerSchema = z.object({
-  nombre: z.string().min(2).max(80),
-  email: z.string().email().max(120),
+  nombre: z.string().trim().min(2).max(80),
+  email: z.string().trim().email().max(120).transform((v) => v.toLowerCase()),
   password: z.string().min(8).max(100),
-  rol: z.enum(["PROPIETARIO", "INQUILINO"]),
+  rol: z.enum(["PROPIETARIO", "INQUILINO"]).default("PROPIETARIO"),
 });
 
 export async function POST(req: Request) {
@@ -16,11 +17,16 @@ export async function POST(req: Request) {
     const result = registerSchema.safeParse(body);
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: "Datos inválidos" },
-        { status: 400 }
-      );
-    }
+  console.log("ERROR DE VALIDACIÓN EN REGISTRO:", result.error.flatten());
+
+  return NextResponse.json(
+    {
+      error: "Datos inválidos",
+      detalles: result.error.flatten(),
+    },
+    { status: 400 }
+  );
+}
 
     const { nombre, email, password, rol } = result.data;
 
@@ -58,6 +64,7 @@ export async function POST(req: Request) {
     return NextResponse.json(nuevoUsuario, { status: 201 });
   } catch (error) {
     console.error("Error en registro:", error);
+
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 }
