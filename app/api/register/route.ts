@@ -1,29 +1,66 @@
-// app/api/register/route.ts
 import { prisma } from "../../../lib/prisma";
 import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
+
+const registerSchema = z.object({
+  nombre: z.string().min(2).max(80),
+  email: z.string().email().max(120),
+  password: z.string().min(8).max(100),
+  rol: z.enum(["PROPIETARIO", "INQUILINO"]),
+});
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { nombre, email, password, rol } = body; // Recibimos el rol del formulario
+    const result = registerSchema.safeParse(body);
 
-    // 1. Verificamos si existe
-    const existe = await prisma.usuario.findUnique({ where: { email } });
-    if (existe) return NextResponse.json({ error: "Ya existe" }, { status: 400 });
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Datos inválidos" },
+        { status: 400 }
+      );
+    }
 
-    // 2. Creamos el usuario con el rol ELEGIDO (PROPIETARIO o INQUILINO)
+    const { nombre, email, password, rol } = result.data;
+
+    const existe = await prisma.usuario.findUnique({
+      where: { email },
+    });
+
+    if (existe) {
+      return NextResponse.json(
+        { error: "El usuario ya existe" },
+        { status: 400 }
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
     const nuevoUsuario = await prisma.usuario.create({
       data: {
         nombre,
         email,
-        password,
-        rol: rol, // <--- AQUÍ: Antes decía "USER", ahora usa lo que el usuario eligió
-        plan: "BASICO"
-      }
+        password: passwordHash,
+        rol,
+        plan: "BASICO",
+      },
+      select: {
+        id: true,
+        nombre: true,
+        email: true,
+        rol: true,
+        plan: true,
+        createdAt: true,
+      },
     });
 
-    return NextResponse.json(nuevoUsuario);
+    return NextResponse.json(nuevoUsuario, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Error" }, { status: 500 });
+    console.error("Error en registro:", error);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 }
+    );
   }
 }
