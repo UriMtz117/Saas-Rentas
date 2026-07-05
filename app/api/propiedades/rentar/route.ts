@@ -1,32 +1,62 @@
+// app/api/propiedades/rentar/route.ts
 import { prisma } from "../../../../lib/prisma";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getSession } from "../../../../lib/auth";
+import { logger, serverErrorResponse } from "../../../../lib/logger";
+
+const rentarSchema = z.object({
+  propiedadId: z.string().min(1),
+  inquilinoId: z.string().min(1),
+  fechaInicio: z.string().min(1),
+  fechaFin: z.string().min(1),
+  montoRenta: z.number().positive().max(1_000_000),
+});
 
 export async function POST(req: Request) {
   try {
-    const { propiedadId, usuarioId } = await req.json();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (session.rol !== "PROPIETARIO" && session.rol !== "ADMIN") {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
 
-    // 1. Buscamos los datos del usuario para crear su perfil de inquilino
-    const user = await prisma.usuario.findUnique({ where: { id: usuarioId } });
+    const body = await req.json();
+    const result = rentarSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+    }
 
-    if (!user) return NextResponse.json({ error: "Usuario no existe" }, { status: 404 });
+    const { propiedadId, inquilinoId, fechaInicio, fechaFin, montoRenta } = result.data;
 
-    // 2. Creamos o actualizamos el registro de Inquilino
-    // Usamos 'upsert' por si el usuario ya rentaba otra cosa, que se actualice a la nueva casa
-    const renta = await prisma.inquilino.upsert({
-      where: { usuarioId: usuarioId },
-      update: { propiedadId: propiedadId },
+    const propiedad = await prisma.propiedad.findUnique({ where: { id: propiedadId } });
+    if (!propiedad) {
+      return NextResponse.json({ error: "Propiedad no encontrada" }, { status: 404 });
+    }
+
+    // BLOQUE 3: Verificar que la propiedad pertenece al propietario autenticado
+    if (session.rol === "PROPIETARIO" && propiedad.usuarioId !== session.id) {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
+
+    const inquilino = await prisma.inquilino.upsert({
+      where: { usuarioId: inquilinoId },
+      update: { propiedadId, fechaInicio, fechaFin, montoRenta },
       create: {
-        nombre: user.nombre,
-        correo: user.email,
-        telefono: "5200000000", // Teléfono temporal
-        propiedadId: propiedadId,
-        usuarioId: usuarioId,
+        usuarioId: inquilinoId,
+        propiedadId,
+        fechaInicio,
+        fechaFin,
+        montoRenta,
+        nombre: "",
       },
     });
 
-    return NextResponse.json(renta);
+    return NextResponse.json({ inquilino });
   } catch (error) {
-    console.error("ERROR AL RENTAR:", error);
-    return NextResponse.json({ error: "Error de servidor" }, { status: 500 });
+    logger.error("POST /api/propiedades/rentar", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }

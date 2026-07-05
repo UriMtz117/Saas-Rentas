@@ -1,77 +1,82 @@
+// app/api/propiedades/route.ts
 import { prisma } from "../../../lib/prisma";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getSession } from "../../../lib/auth";
+import { logger, serverErrorResponse } from "../../../lib/logger";
 
-// MÉTODO GET: Listado inteligente de propiedades
-export async function GET(req: Request) {
+// BLOQUE 2: Validación de entrada para POST
+const propiedadSchema = z.object({
+  nombre: z.string().trim().min(2).max(100),
+  tipo: z.enum(["Casa", "Departamento", "Cuarto", "Local", "Bodega"]),
+  direccion: z.string().trim().min(5).max(200),
+  precio: z.number().positive().max(1_000_000),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  fotos: z.array(z.string().url()).optional().default([]),
+});
+
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const uid = searchParams.get("uid");
-
-    if (!uid || uid === "undefined" || uid === "null") {
-      return NextResponse.json({ error: "Sesión no válida" }, { status: 400 });
+    // BLOQUE 3: Verificar sesión desde cookie (no desde query param uid)
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    // 1. Buscamos el rol del usuario que hace la petición
-    const user = await prisma.usuario.findUnique({ where: { id: uid } });
-
-    if (!user) {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-    }
-
-    // 2. DEFINIMOS QUÉ PUEDE VER SEGÚN SU ROL
     let filter = {};
 
-    if (user.rol === "PROPIETARIO") {
-      // Propietario: Solo ve sus propios activos
-      filter = { usuarioId: uid };
-    } else if (user.rol === "INQUILINO") {
-      // Inquilino: Solo ve las propiedades donde él tiene un contrato activo
-      filter = {
-        inquilinos: {
-          some: {
-            usuarioId: uid
-          }
-        }
-      };
-    } else if (user.rol === "ADMIN") {
-      // Admin: Ve todo el inventario global
-      filter = {};
+    if (session.rol === "PROPIETARIO") {
+      filter = { usuarioId: session.id };
+    } else if (session.rol === "INQUILINO") {
+      const perfil = await prisma.inquilino.findUnique({ where: { usuarioId: session.id } });
+      if (!perfil?.propiedadId) {
+        return NextResponse.json({ propiedades: [] });
+      }
+      filter = { id: perfil.propiedadId };
+    } else if (session.rol === "ADMIN") {
+      filter = {}; // Admin ve todo
     }
 
     const propiedades = await prisma.propiedad.findMany({
       where: filter,
-      orderBy: { nombre: 'asc' }
+      orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(propiedades);
-
-  } catch (error: any) {
-    console.error("Error en API Propiedades:", error.message);
-    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 });
+    return NextResponse.json({ propiedades });
+  } catch (error) {
+    logger.error("GET /api/propiedades", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }
 
-// MÉTODO POST: Registro de propiedades nuevas (Solo para Dueños/Admin)
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { nombre, tipo, direccion, precio, usuarioId, fotos, lat, lng } = body;
+    // BLOQUE 3: Verificar sesión y rol
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+    if (session.rol !== "PROPIETARIO" && session.rol !== "ADMIN") {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
 
-    const nueva = await prisma.propiedad.create({
+    const body = await req.json();
+    const result = propiedadSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+    }
+
+    const propiedad = await prisma.propiedad.create({
       data: {
-        nombre,
-        tipo,
-        direccion,
-        precio: parseFloat(precio),
-        usuarioId,
-        fotos: fotos || [],
-        lat: lat ? parseFloat(lat) : null,
-        lng: lng ? parseFloat(lng) : null,
-      }
+        ...result.data,
+        usuarioId: session.id,
+      },
     });
 
-    return NextResponse.json(nueva);
+    return NextResponse.json({ propiedad }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Fallo al crear" }, { status: 500 });
+    logger.error("POST /api/propiedades", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }

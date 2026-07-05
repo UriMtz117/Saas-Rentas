@@ -1,62 +1,48 @@
 // app/api/explorar/route.ts
 import { prisma } from "../../../lib/prisma";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { logger, serverErrorResponse } from "../../../lib/logger";
+
+// Ruta pública — no requiere sesión
+const filtrosSchema = z.object({
+  tipo: z.enum(["Casa", "Departamento", "Cuarto", "Local", "Bodega", "todos"]).optional(),
+  precioMin: z.coerce.number().min(0).optional(),
+  precioMax: z.coerce.number().min(0).optional(),
+  ciudad: z.string().trim().max(100).optional(),
+});
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    
-    // 1. CAPTURA Y LIMPIEZA DE DATOS
-    const q = searchParams.get("q")?.slice(0, 50) || ""; 
-    const tipo = searchParams.get("tipo") || "TODOS";
-    const min = parseFloat(searchParams.get("min") || "0");
-    const max = parseFloat(searchParams.get("max") || "999999");
-    const sort = searchParams.get("sort") || "newest";
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const limit = 6; 
-    const skip = (page - 1) * limit;
 
-    // 2. VALIDACIÓN DE ERRORES (Punto 4 de la rúbrica)
-    if (min > max && max !== 0) {
-      return NextResponse.json({ error: "El rango de precio es inválido (Mínimo > Máximo)" }, { status: 400 });
-    }
-
-    // 3. CONSTRUCCIÓN DE QUERY DINÁMICA
-    const whereClause: any = {
-      precio: { gte: min, lte: max > 0 ? max : 999999 },
-      OR: q ? [
-        { nombre: { contains: q, mode: 'insensitive' } },
-        { direccion: { contains: q, mode: 'insensitive' } }
-      ] : undefined
-    };
-    if (tipo !== "TODOS") whereClause.tipo = tipo;
-
-    // 4. LÓGICA DE ORDENAMIENTO (Fecha y Precio)
-    let orderBy: any = {};
-    if (sort === "newest") orderBy = { createdAt: 'desc' };
-    if (sort === "oldest") orderBy = { createdAt: 'asc' };
-    if (sort === "price_asc") orderBy = { precio: 'asc' };
-    if (sort === "price_desc") orderBy = { precio: 'desc' };
-
-    // 5. CONSULTA SIMULTÁNEA (Total e Items)
-    const [total, propiedades] = await Promise.all([
-      prisma.propiedad.count({ where: whereClause }),
-      prisma.propiedad.findMany({
-        where: whereClause,
-        skip: skip,
-        take: limit,
-        orderBy: orderBy
-      })
-    ]);
-
-    return NextResponse.json({
-      items: propiedades,
-      total: total,
-      page,
-      totalPages: Math.ceil(total / limit)
+    const result = filtrosSchema.safeParse({
+      tipo: searchParams.get("tipo"),
+      precioMin: searchParams.get("precioMin"),
+      precioMax: searchParams.get("precioMax"),
+      ciudad: searchParams.get("ciudad"),
     });
 
+    if (!result.success) {
+      return NextResponse.json({ error: "Filtros inválidos" }, { status: 400 });
+    }
+
+    const { tipo, precioMin, precioMax } = result.data;
+
+    // BLOQUE 2: Consulta parametrizada con Prisma
+    const propiedades = await prisma.propiedad.findMany({
+      where: {
+        ...(tipo && tipo !== "todos" ? { tipo } : {}),
+        ...(precioMin !== undefined ? { precio: { gte: precioMin } } : {}),
+        ...(precioMax !== undefined ? { precio: { lte: precioMax } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    return NextResponse.json({ propiedades });
   } catch (error) {
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    logger.error("GET /api/explorar", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }

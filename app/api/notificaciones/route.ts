@@ -1,23 +1,25 @@
-import { prisma } from "../../../lib/prisma"; // Asegúrate de que esta ruta sea correcta
+// app/api/notificaciones/route.ts
+import { prisma } from "../../../lib/prisma";
 import { NextResponse } from "next/server";
+import { getSession } from "../../../lib/auth";
+import { logger, serverErrorResponse } from "../../../lib/logger";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const uid = searchParams.get("uid");
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
-    if (!uid || uid === "undefined") return NextResponse.json([]);
-
-    const notificaciones = await (prisma.notificacion as any).findMany({
-      where: {
-        usuarioId: uid,
-        leido: false
-      },
-      orderBy: { createdAt: 'desc' }
+    const notificaciones = await prisma.notificacion.findMany({
+      where: { usuarioId: session.id },
+      orderBy: { createdAt: "desc" },
+      take: 50,
     });
 
-    return NextResponse.json(notificaciones);
+    return NextResponse.json({ notificaciones });
   } catch (error) {
-    return NextResponse.json({ error: "Fallo en servidor" }, { status: 500 });
+    logger.error("GET /api/notificaciones", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }

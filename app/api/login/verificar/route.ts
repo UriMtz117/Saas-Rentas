@@ -1,24 +1,27 @@
 // app/api/login/verificar/route.ts
-import { prisma } from "../../../../lib/prisma";
 import { NextResponse } from "next/server";
+import { getSession } from "../../../../lib/auth";
+import { logger, serverErrorResponse } from "../../../../lib/logger";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const uid = searchParams.get("uid");
+    const session = await getSession();
 
-    if (!uid) return NextResponse.json({ error: "No UID" }, { status: 400 });
+    if (!session) {
+      return NextResponse.json({ autenticado: false }, { status: 401 });
+    }
 
-    // Buscamos al usuario en la base de datos
-    const user = await prisma.usuario.findUnique({
-      where: { id: uid },
-      select: { id: true, nombre: true, rol: true } // Solo datos necesarios
+    return NextResponse.json({
+      autenticado: true,
+      usuario: {
+        id: session.id,
+        nombre: session.nombre,
+        rol: session.rol,
+        plan: session.plan,
+      },
     });
-
-    if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-    return NextResponse.json(user);
   } catch (error) {
-    return NextResponse.json({ error: "Error" }, { status: 500 });
+    logger.error("GET /api/login/verificar", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }

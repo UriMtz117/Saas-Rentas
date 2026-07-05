@@ -1,55 +1,42 @@
 // app/api/login/recuperar/route.ts
-import { prisma } from "../../../../lib/prisma"; // Ruta para estructura sin carpeta src
+import { prisma } from "../../../../lib/prisma";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { logger, serverErrorResponse } from "../../../../lib/logger";
+
+const recuperarSchema = z.object({
+  email: z.string().trim().email().transform((v) => v.toLowerCase()),
+});
 
 export async function POST(req: Request) {
   try {
-    // 1. CAPTURAMOS EL CORREO DEL CUERPO DE LA PETICIÓN
     const body = await req.json();
-    const { email } = body;
+    const result = recuperarSchema.safeParse(body);
 
-    // VALIDACIÓN BÁSICA DE ENTRADA
-    if (!email) {
-      return NextResponse.json(
-        { error: "El campo de correo electrónico es obligatorio." },
-        { status: 400 }
-      );
+    if (!result.success) {
+      return NextResponse.json({ error: "Correo inválido" }, { status: 400 });
     }
 
-    // 2. BUSCAMOS AL USUARIO EN LA BASE DE DATOS (SUPABASE)
-    const usuario = await prisma.usuario.findUnique({
-      where: { 
-        email: email.toLowerCase().trim() 
-      },
-      select: { 
-        id: true, 
-        nombre: true 
-      }
-    });
+    const { email } = result.data;
+    const usuario = await prisma.usuario.findUnique({ where: { email } });
 
-    // 3. LÓGICA DE SIMULACIÓN DE ENVÍO
-    if (usuario) {
-      // En un entorno de producción, aquí generaríamos un Token JWT
-      // y lo enviaríamos por correo usando Nodemailer o SendGrid.
-      console.log(`[SISTEMA DE SEGURIDAD]: Generando ticket de recuperación para ${usuario.nombre} (${email})`);
-      
-      // Simulamos una demora de red para que la experiencia sea real
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+    // BLOQUE 5: Siempre responder igual para no revelar si el email existe
+    if (!usuario) {
+      return NextResponse.json({
+        ok: true,
+        mensaje: "Si el correo existe, recibirás instrucciones.",
+      });
     }
 
-    // 4. RESPUESTA DE SEGURIDAD (ANTI-ENUMERACIÓN)
-    // Siempre devolvemos éxito para que un atacante no sepa si el correo existe o no.
+    // Aquí iría la lógica de envío de correo de recuperación
+    logger.info("POST /api/login/recuperar", `Recuperación solicitada para: ${email}`);
+
     return NextResponse.json({
-      success: true,
-      mensaje: "Si el correo electrónico proporcionado está registrado en nuestra base de datos, recibirá un enlace de restablecimiento en breve."
+      ok: true,
+      mensaje: "Si el correo existe, recibirás instrucciones.",
     });
-
-  } catch (error: any) {
-    console.error("ERROR CRÍTICO EN API RECUPERAR:", error.message);
-    
-    return NextResponse.json(
-      { error: "Hubo un fallo interno al procesar la solicitud de recuperación." },
-      { status: 500 }
-    );
+  } catch (error) {
+    logger.error("POST /api/login/recuperar", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }

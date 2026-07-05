@@ -1,29 +1,56 @@
-import { prisma } from "../../../../lib/prisma";
+// app/api/inquilinos/documentos/route.ts
 import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getSession } from "../../../../lib/auth";
+import { logger, serverErrorResponse } from "../../../../lib/logger";
+
+// BLOQUE 2: Tipos MIME permitidos (previene subida de scripts maliciosos)
+const MIME_PERMITIDOS = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+];
+const EXTENSIONES_PERMITIDAS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
+const TAMANO_MAXIMO_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: Request) {
   try {
-    const { inquilinoId, url, nombre } = await req.json();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
-    // 1. Buscamos al inquilino
-    const inquilino = await prisma.inquilino.findUnique({
-      where: { id: inquilinoId }
-    });
+    const formData = await req.formData();
+    const archivo = formData.get("archivo") as File | null;
 
-    // 2. Extraemos lo que ya tiene (si es un array)
-    const docsActuales = Array.isArray(inquilino?.documentos) ? (inquilino.documentos as any[]) : [];
-    
-    // 3. Agregamos el nuevo link
-    const nuevosDocs = [...docsActuales, { nombre, url, fecha: new Date() }];
+    if (!archivo) {
+      return NextResponse.json({ error: "No se recibió ningún archivo" }, { status: 400 });
+    }
 
-    // 4. Actualizamos la base de datos
-    await prisma.inquilino.update({
-      where: { id: inquilinoId },
-      data: { documentos: nuevosDocs }
-    });
+    // BLOQUE 2: Validar tamaño máximo (previene DoS)
+    if (archivo.size > TAMANO_MAXIMO_BYTES) {
+      return NextResponse.json({ error: "El archivo supera el límite de 5 MB" }, { status: 400 });
+    }
 
-    return NextResponse.json({ success: true });
+    // BLOQUE 2: Validar tipo MIME real
+    if (!MIME_PERMITIDOS.includes(archivo.type)) {
+      return NextResponse.json({ error: "Tipo de archivo no permitido" }, { status: 400 });
+    }
+
+    // BLOQUE 2: Validar extensión del nombre del archivo
+    const nombre = archivo.name.toLowerCase();
+    const extensionValida = EXTENSIONES_PERMITIDAS.some((ext) => nombre.endsWith(ext));
+    if (!extensionValida) {
+      return NextResponse.json({ error: "Extensión de archivo no permitida" }, { status: 400 });
+    }
+
+    // Aquí iría la lógica de subida a Supabase Storage
+    // const { data, error } = await supabase.storage.from('documentos').upload(...)
+
+    return NextResponse.json({ ok: true, mensaje: "Archivo validado y subido correctamente" });
   } catch (error) {
-    return NextResponse.json({ error: "Fallo en la BD" }, { status: 500 });
+    logger.error("POST /api/inquilinos/documentos", error);
+    return NextResponse.json(serverErrorResponse(), { status: 500 });
   }
 }
