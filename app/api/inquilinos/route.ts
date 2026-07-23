@@ -5,11 +5,10 @@ import { z } from "zod";
 import { getSession } from "../../../lib/auth";
 import { logger, serverErrorResponse } from "../../../lib/logger";
 
-// BLOQUE 2: Validación para crear inquilino
 const inquilinoSchema = z.object({
   nombre: z.string().trim().min(2).max(80),
-  email: z.string().trim().email().max(120).optional(),
-  telefono: z.string().trim().max(20).optional(),
+  correo: z.string().trim().email().max(120).optional().default(""),  // ← correo, no email
+  telefono: z.string().trim().max(20).optional().default(""),
   propiedadId: z.string().min(1),
   fechaInicio: z.string().min(1),
   fechaFin: z.string().min(1),
@@ -18,7 +17,6 @@ const inquilinoSchema = z.object({
 
 export async function GET() {
   try {
-    // BLOQUE 3: Sesión desde cookie, no desde uid en query param
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
@@ -34,7 +32,7 @@ export async function GET() {
     const inquilinos = await prisma.inquilino.findMany({
       where,
       include: { propiedad: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { id: "desc" },
     });
 
     return NextResponse.json({ inquilinos });

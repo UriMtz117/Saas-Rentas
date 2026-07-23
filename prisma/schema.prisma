@@ -47,17 +47,15 @@ model Propiedad {
 
 // 3. CONTRATOS LEGALES DIGITALES
 model Contrato {
-  id           String    @id @default(cuid())
-  cuerpo       String    @db.Text   // Texto completo del contrato
-  firmado      Boolean   @default(false) // Firma del inquilino
-  firmaImg     String?   @db.Text   // Imagen de firma del inquilino
-  firmaOwner   String?   @db.Text   // Imagen de firma del propietario
-  firmadoOwner Boolean   @default(false) // Firma del propietario
-  fechaFirma   DateTime?
-  
-  // Relación 1 a 1 con el registro de inquilino
-  inquilinoId  String    @unique
-  inquilino    Inquilino @relation(fields: [inquilinoId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  inquilinoId     String   @unique
+  cuerpo          String
+  firmaOwner      String?
+  firmadoOwner    Boolean  @default(false)
+  firmaInquilino  String?   // ← AGREGA ESTA LÍNEA
+  firmado         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  inquilino       Inquilino @relation(fields: [inquilinoId], references: [id])
 }
 
 // 4. SISTEMA DE ALERTAS Y NOTIFICACIONES

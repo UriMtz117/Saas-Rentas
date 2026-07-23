@@ -7,7 +7,7 @@ import { logger, serverErrorResponse } from "../../../../lib/logger";
 
 const firmarSchema = z.object({
   contratoId: z.string().min(1),
-  firmaInquilino: z.string().min(1),
+  firma: z.string().min(1),
 });
 
 export async function POST(req: Request) {
@@ -23,11 +23,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
     }
 
-    const { contratoId, firmaInquilino } = result.data;
+    const { contratoId, firma } = result.data;
 
     const contrato = await prisma.contrato.update({
       where: { id: contratoId },
-      data: { firmaInquilino, firmado: true },
+      data: {
+        firmaOwner: firma,
+        firmadoOwner: true,
+        firmado: true,
+      },
     });
 
     return NextResponse.json({ contrato });

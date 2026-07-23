@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: "https://zjxerovkdoowluwopvoq.supabase.co"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpqeGVyb3ZrZG9vd2x1d29wdm9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3MDgwMzksImV4cCI6MjA4NDI4NDAzOX0.Fq35CqpdoLBSIR_gJ4UR5GqlpACwDeA6VufiSWrfpF0"
+
+    container_name: saas-rentas-app
+
+    env_file:
+      - .env
+
+    expose:
+      - "3000"
+
+    restart: unless-stopped
+
+    networks:
+      - saas-network
+
+  nginx:
+    image: nginx:alpine
+
+    container_name: saas-rentas-nginx
+
+    depends_on:
+      - app
+
+    ports:
+      - "8080:80"
+      - "8443:443"
+
+    volumes:
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+
+    restart: unless-stopped
+
+    networks:
+      - saas-network
+
+networks:
+  saas-network:
+    driver: bridge
