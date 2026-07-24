@@ -25,7 +25,7 @@ export default async function RecordatoriosPage() {
   // - Si es ADMIN, traemos todos.
   // - Si es OWNER, solo sus propiedades.
   // - Si es INQUILINO, solo sus propios adeudos.
-  let filter: any = { estado: { not: "PAGADO" } };
+  const filter: any = { estado: { not: "PAGADO" } };
 
   if (isOwner) {
     filter.inquilino = { propiedad: { usuarioId: uid } };
