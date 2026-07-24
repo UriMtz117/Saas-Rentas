@@ -11,7 +11,8 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test --project=chromium",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "lint:strict": "eslint . --max-warnings=0"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
